@@ -1,3 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">SmartTask</string>
+    <string name="header_subtitle">Quan ly cong viec thong minh</string>
+    <string name="completed">Hoan thanh</string>
+    <string name="pending">Dang cho</string>
+    <string name="task_list_title">Danh sach cong viec</string>
+    <string name="add_new">+ Them moi</string>
+    <string name="task_name_hint">Ten cong viec</string>
+    <string name="default_time">09:00 AM</string>
+    <string name="delete">Xoa</string>
+    <string name="zero">0</string>
+    <string name="add_dialog_title">Them cong viec moi</string>
+    <string name="add">Them</string>
+    <string name="cancel">Huy</string>
+    <string name="time_hint">Gio (VD: 09:00 AM)</string>
+    <string name="no_time">Chua dat gio</string>
+    <string name="deleted_message">Da xoa</string>
+    <string name="welcome_message">Chao ngay moi! Hay hoan thanh cong viec nhe</string>
 </resources>
