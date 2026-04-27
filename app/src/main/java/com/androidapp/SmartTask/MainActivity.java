@@ -1,6 +1,8 @@
 package com.androidapp.SmartTask;
 
 import android.app.AlertDialog;
+import android.content.Intent;
+import android.content.SharedPreferences;
 import android.graphics.Paint;
 import android.os.Bundle;
 import android.view.LayoutInflater;
@@ -25,16 +27,37 @@ public class MainActivity extends AppCompatActivity {
     private final List<Task> taskList = new ArrayList<>();
     private TextView tvComplete;
     private TextView tvPending;
+    private SharedPreferences prefs;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
+        prefs = getSharedPreferences("SmartTask", MODE_PRIVATE);
+
+        // Check login
+        if (!prefs.getBoolean("isLoggedIn", false)) {
+            startActivity(new Intent(this, LoginActivity.class));
+            finish();
+            return;
+        }
+
         recyclerView = findViewById(R.id.recyclerView);
         tvComplete = findViewById(R.id.tvComplete);
         tvPending = findViewById(R.id.tvPending);
         TextView tvAddNew = findViewById(R.id.tvAddNew);
+        TextView tvLogout = findViewById(R.id.tvLogout);
+
+        // Logout
+        tvLogout.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                prefs.edit().putBoolean("isLoggedIn", false).apply();
+                startActivity(new Intent(MainActivity.this, LoginActivity.class));
+                finish();
+            }
+        });
 
         taskList.add(new Task("Hoc Android Studio", "09:00 AM", false));
         taskList.add(new Task("Lam bai tap", "02:00 PM", false));
@@ -69,7 +92,6 @@ public class MainActivity extends AppCompatActivity {
                 }
                 taskList.add(new Task(title, time, false));
                 adapter.notifyItemInserted(taskList.size() - 1);
-                recyclerView.scrollToPosition(taskList.size() - 1);
                 updateStats();
                 Toast.makeText(MainActivity.this, "Da them: " + title, Toast.LENGTH_SHORT).show();
             }
@@ -155,4 +177,4 @@ public class MainActivity extends AppCompatActivity {
             }
         }
     }
-}//tai sao commit ma code ko push len git???
+}

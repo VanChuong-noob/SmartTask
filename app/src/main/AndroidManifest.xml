@@ -10,14 +10,20 @@
         android:theme="@style/Theme.AppCompat.Light.NoActionBar"
         tools:ignore="HardcodedText,MissingApplicationIcon">
 
+        <!-- Màn hình Login chạy đầu tiên -->
         <activity
-            android:name="com.androidapp.SmartTask.MainActivity"
+            android:name="com.androidapp.SmartTask.LoginActivity"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- Màn hình chính -->
+        <activity
+            android:name="com.androidapp.SmartTask.MainActivity"
+            android:exported="false" />
 
     </application>
 </manifest>
