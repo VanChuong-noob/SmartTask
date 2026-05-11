@@ -14,6 +14,7 @@ public class LoginActivity extends AppCompatActivity {
 
     private EditText etEmail, etPassword;
     private TextView btnLogin, tvRegister;
+    private DatabaseHelper dbHelper;
     private SharedPreferences prefs;
 
     @Override
@@ -21,9 +22,10 @@ public class LoginActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_login);
 
+        dbHelper = new DatabaseHelper(this);
         prefs = getSharedPreferences("SmartTask", MODE_PRIVATE);
 
-        // Check nếu đã login rồi thì vào thẳng Main
+        // Check nếu đã login
         if (prefs.getBoolean("isLoggedIn", false)) {
             goToMain();
             return;
@@ -63,22 +65,14 @@ public class LoginActivity extends AppCompatActivity {
             return;
         }
 
-        // Check đơn giản (demo)
-        String savedPassword = prefs.getString("password_" + email, "");
-
-        if (savedPassword.isEmpty()) {
-            Toast.makeText(this, "Tai khoan khong ton tai. Vui long dang ky!", Toast.LENGTH_SHORT).show();
-            return;
-        }
-
-        if (savedPassword.equals(password)) {
-            // Login thành công
+        // Check trong database
+        if (dbHelper.checkUser(email, password)) {
             prefs.edit().putBoolean("isLoggedIn", true).apply();
             prefs.edit().putString("currentUser", email).apply();
             Toast.makeText(this, "Dang nhap thanh cong!", Toast.LENGTH_SHORT).show();
             goToMain();
         } else {
-            Toast.makeText(this, "Sai mat khau!", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "Sai email hoac mat khau!", Toast.LENGTH_SHORT).show();
         }
     }
 
@@ -101,13 +95,22 @@ public class LoginActivity extends AppCompatActivity {
             return;
         }
 
-        // Lưu tài khoản (demo dùng SharedPreferences)
-        prefs.edit().putString("password_" + email, password).apply();
-        prefs.edit().putBoolean("isLoggedIn", true).apply();
-        prefs.edit().putString("currentUser", email).apply();
+        // Check email đã tồn tại chưa
+        if (dbHelper.checkEmailExists(email)) {
+            Toast.makeText(this, "Email da duoc dang ky!", Toast.LENGTH_SHORT).show();
+            return;
+        }
 
-        Toast.makeText(this, "Dang ky thanh cong!", Toast.LENGTH_SHORT).show();
-        goToMain();
+        // Đăng ký
+        String name = email.split("@")[0]; // Lấy phần trước @ làm tên
+        if (dbHelper.registerUser(email, password, name)) {
+            prefs.edit().putBoolean("isLoggedIn", true).apply();
+            prefs.edit().putString("currentUser", email).apply();
+            Toast.makeText(this, "Dang ky thanh cong!", Toast.LENGTH_SHORT).show();
+            goToMain();
+        } else {
+            Toast.makeText(this, "Dang ky that bai!", Toast.LENGTH_SHORT).show();
+        }
     }
 
     private void goToMain() {

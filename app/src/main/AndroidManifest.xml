@@ -2,6 +2,12 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.VIBRATE" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+
     <application
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
@@ -10,7 +16,6 @@
         android:theme="@style/Theme.AppCompat.Light.NoActionBar"
         tools:ignore="HardcodedText,MissingApplicationIcon">
 
-        <!-- Màn hình Login chạy đầu tiên -->
         <activity
             android:name="com.androidapp.SmartTask.LoginActivity"
             android:exported="true">
@@ -20,10 +25,22 @@
             </intent-filter>
         </activity>
 
-        <!-- Màn hình chính -->
         <activity
             android:name="com.androidapp.SmartTask.MainActivity"
             android:exported="false" />
+
+        <receiver
+            android:name="com.androidapp.SmartTask.AlarmReceiver"
+            android:exported="false" />
+
+        <receiver
+            android:name="com.androidapp.SmartTask.BootReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+            </intent-filter>
+        </receiver>
 
     </application>
 </manifest>
