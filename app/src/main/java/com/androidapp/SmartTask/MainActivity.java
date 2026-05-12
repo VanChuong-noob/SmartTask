@@ -1,9 +1,13 @@
 package com.androidapp.SmartTask;
 
+import android.Manifest;
+import android.app.AlarmManager;
 import android.app.AlertDialog;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.pm.PackageManager;
 import android.graphics.Paint;
+import android.os.Build;
 import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -53,6 +57,7 @@ public class MainActivity extends AppCompatActivity {
         alarmScheduler = new AlarmScheduler(this);
         prefs = getSharedPreferences("SmartTask", MODE_PRIVATE);
 
+        // Check login
         if (!prefs.getBoolean("isLoggedIn", false)) {
             startActivity(new Intent(this, LoginActivity.class));
             finish();
@@ -61,6 +66,27 @@ public class MainActivity extends AppCompatActivity {
 
         currentUser = prefs.getString("currentUser", "");
 
+        // Request quyền exact alarm cho Android 12+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            AlarmManager alarmManager = (AlarmManager) getSystemService(ALARM_SERVICE);
+            if (alarmManager != null && !alarmManager.canScheduleExactAlarms()) {
+                Intent intent = new Intent(android.provider.Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM);
+                startActivity(intent);
+            }
+        }
+
+        // Request quyền notification cho Android 13+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
+                    != PackageManager.PERMISSION_GRANTED) {
+                requestPermissions(
+                        new String[]{Manifest.permission.POST_NOTIFICATIONS},
+                        1001
+                );
+            }
+        }
+
+        // Ánh xạ views
         recyclerView = findViewById(R.id.recyclerView);
         tvComplete = findViewById(R.id.tvComplete);
         tvPending = findViewById(R.id.tvPending);
@@ -70,25 +96,46 @@ public class MainActivity extends AppCompatActivity {
         TextView tvLogout = findViewById(R.id.tvLogout);
         TextView tvDeleteCompleted = findViewById(R.id.tvDeleteCompleted);
 
+        // Đặt morning reminder mặc định 8:00 sáng mỗi ngày
         alarmScheduler.scheduleMorningReminder(8, 0);
+
+        // SMART FEATURE: Check first open today
         smartFeature.checkFirstOpenToday(currentUser);
+
+        // Load tasks từ database
         loadTasks();
 
+        // Setup RecyclerView
         adapter = new TaskAdapter(taskList);
         recyclerView.setLayoutManager(new LinearLayoutManager(this));
         recyclerView.setAdapter(adapter);
-        updateSuggestion();
 
+        // Update suggestion + streak
+        updateSuggestion();
         tvStreak.setText(String.valueOf(smartFeature.getStreak()));
 
+        // Logout
         tvLogout.setOnClickListener(v -> {
             prefs.edit().clear().apply();
             startActivity(new Intent(MainActivity.this, LoginActivity.class));
             finish();
         });
 
+        // Thêm task mới
         tvAddNew.setOnClickListener(v -> showAddTaskDialog());
+
+        // Xoá task đã hoàn thành
         tvDeleteCompleted.setOnClickListener(v -> deleteCompletedTasks());
+
+        // TEST ALARM - Bỏ comment dòng dưới để test, sau đó comment lại
+        // alarmScheduler.scheduleTestAlarm("Test thong bao khi tat app");
+        // Toast.makeText(this, "Alarm test set - Tat app va doi 10 giay!", Toast.LENGTH_LONG).show();
+
+        // Hiển thị streak
+        int streak = smartFeature.getStreak();
+        if (streak > 1) {
+            Toast.makeText(this, "🔥 Streak: " + streak + " ngay lien tiep!", Toast.LENGTH_SHORT).show();
+        }
     }
 
     @Override
@@ -109,6 +156,7 @@ public class MainActivity extends AppCompatActivity {
         tvSuggestion.setText("💡 " + suggestion);
     }
 
+    // ============ TIME PICKER ============
     private void showTimePickerDialog(TextView tvTimeDisplay) {
         AlertDialog.Builder builder = new AlertDialog.Builder(this);
         View view = LayoutInflater.from(this).inflate(R.layout.dialog_time_picker, null);
@@ -140,6 +188,7 @@ public class MainActivity extends AppCompatActivity {
         builder.show();
     }
 
+    // ============ CREATE ============
     private void showAddTaskDialog() {
         AlertDialog.Builder builder = new AlertDialog.Builder(this);
         View view = LayoutInflater.from(this).inflate(R.layout.dialog_add_task, null);
@@ -160,7 +209,9 @@ public class MainActivity extends AppCompatActivity {
             String description = etDescription.getText().toString().trim();
 
             if (!title.isEmpty()) {
-                String todayDate = new SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()).format(new Date());
+                String todayDate = new SimpleDateFormat("dd/MM/yyyy", Locale.getDefault())
+                        .format(new Date());
+
                 long taskId = dbHelper.addTask(title, description, selectedTime, todayDate, currentUser);
                 if (taskId != -1) {
                     if (cbSetReminder.isChecked() && !selectedTime.equals("Chua dat gio")) {
@@ -178,6 +229,7 @@ public class MainActivity extends AppCompatActivity {
         builder.show();
     }
 
+    // ============ UPDATE ============
     private void showEditTaskDialog(Task task) {
         AlertDialog.Builder builder = new AlertDialog.Builder(this);
         View view = LayoutInflater.from(this).inflate(R.layout.dialog_add_task, null);
@@ -230,6 +282,7 @@ public class MainActivity extends AppCompatActivity {
         builder.show();
     }
 
+    // ============ TOGGLE COMPLETE ============
     private void toggleTaskComplete(Task task, int position) {
         boolean newStatus = !task.isCompleted();
         dbHelper.toggleTaskComplete(task.getId(), newStatus);
@@ -241,9 +294,14 @@ public class MainActivity extends AppCompatActivity {
         if (newStatus) {
             alarmScheduler.cancelTaskReminder(task.getId());
             Toast.makeText(this, "🎉 Hoan thanh: " + task.getTitle(), Toast.LENGTH_SHORT).show();
+
+            if (dbHelper.getPendingCount(currentUser) == 0) {
+                Toast.makeText(this, "🎊 Chuc mung! Tat ca cong viec da hoan thanh!", Toast.LENGTH_LONG).show();
+            }
         }
     }
 
+    // ============ DELETE ============
     private void deleteTask(Task task, int position) {
         new AlertDialog.Builder(this)
                 .setTitle("🗑️ Xoa cong viec")
@@ -282,6 +340,7 @@ public class MainActivity extends AppCompatActivity {
                 .show();
     }
 
+    // ============ UPDATE STATS ============
     private void updateStats() {
         int completed = dbHelper.getCompletedCount(currentUser);
         int pending = dbHelper.getPendingCount(currentUser);
@@ -290,6 +349,7 @@ public class MainActivity extends AppCompatActivity {
         tvStreak.setText(String.valueOf(smartFeature.getStreak()));
     }
 
+    // ============ ADAPTER ============
     private class TaskAdapter extends RecyclerView.Adapter<TaskAdapter.ViewHolder> {
 
         private final List<Task> tasks;
