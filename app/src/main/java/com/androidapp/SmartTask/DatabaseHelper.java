@@ -5,19 +5,27 @@ import android.content.Context;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteOpenHelper;
+
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Calendar;
+import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 
 public class DatabaseHelper extends SQLiteOpenHelper {
 
     public DatabaseHelper(Context context) {
-        super(context, "SmartTaskDB", null, 2);
+        super(context, "SmartTaskDB", null, 3);
     }
 
     @Override
     public void onCreate(SQLiteDatabase db) {
         db.execSQL("CREATE TABLE users(id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT UNIQUE, password TEXT, name TEXT)");
         db.execSQL("CREATE TABLE tasks(id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT, description TEXT, time TEXT, date TEXT, completed INTEGER DEFAULT 0, user_email TEXT, location_name TEXT, location_lat REAL DEFAULT 0, location_lng REAL DEFAULT 0, location_reminder INTEGER DEFAULT 0)");
+        db.execSQL("CREATE TABLE task_history(id INTEGER PRIMARY KEY AUTOINCREMENT, user_email TEXT, task_date TEXT, completed_count INTEGER DEFAULT 0, pending_count INTEGER DEFAULT 0, total_count INTEGER DEFAULT 0)");
     }
 
     @Override
@@ -28,8 +36,12 @@ public class DatabaseHelper extends SQLiteOpenHelper {
             db.execSQL("ALTER TABLE tasks ADD COLUMN location_lng REAL DEFAULT 0");
             db.execSQL("ALTER TABLE tasks ADD COLUMN location_reminder INTEGER DEFAULT 0");
         }
+        if (oldVersion < 3) {
+            db.execSQL("CREATE TABLE IF NOT EXISTS task_history(id INTEGER PRIMARY KEY AUTOINCREMENT, user_email TEXT, task_date TEXT UNIQUE, completed_count INTEGER DEFAULT 0, pending_count INTEGER DEFAULT 0, total_count INTEGER DEFAULT 0)");
+        }
     }
 
+    // ============ USER METHODS ============
     public boolean registerUser(String email, String password, String name) {
         ContentValues cv = new ContentValues();
         cv.put("email", email);
@@ -60,6 +72,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         return name;
     }
 
+    // ============ TASK CRUD ============
     public long addTask(Task task) {
         ContentValues cv = new ContentValues();
         cv.put("title", task.getTitle());
@@ -72,7 +85,9 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         cv.put("location_lat", task.getLocationLat());
         cv.put("location_lng", task.getLocationLng());
         cv.put("location_reminder", task.isLocationReminder() ? 1 : 0);
-        return getWritableDatabase().insert("tasks", null, cv);
+        long id = getWritableDatabase().insert("tasks", null, cv);
+        saveDailyHistory(task.getUserEmail());
+        return id;
     }
 
     public List<Task> getAllTasks(String userEmail) {
@@ -134,7 +149,9 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         cv.put("location_lat", task.getLocationLat());
         cv.put("location_lng", task.getLocationLng());
         cv.put("location_reminder", task.isLocationReminder() ? 1 : 0);
-        return getWritableDatabase().update("tasks", cv, "id=?", new String[]{String.valueOf(task.getId())});
+        int rows = getWritableDatabase().update("tasks", cv, "id=?", new String[]{String.valueOf(task.getId())});
+        saveDailyHistory(task.getUserEmail());
+        return rows;
     }
 
     public void toggleTaskComplete(int taskId, boolean completed) {
@@ -144,13 +161,17 @@ public class DatabaseHelper extends SQLiteOpenHelper {
     }
 
     public int deleteTask(int taskId) {
-        return getWritableDatabase().delete("tasks", "id=?", new String[]{String.valueOf(taskId)});
+        int rows = getWritableDatabase().delete("tasks", "id=?", new String[]{String.valueOf(taskId)});
+        return rows;
     }
 
     public int deleteCompletedTasks(String userEmail) {
-        return getWritableDatabase().delete("tasks", "user_email=? AND completed=?", new String[]{userEmail, "1"});
+        int rows = getWritableDatabase().delete("tasks", "user_email=? AND completed=?", new String[]{userEmail, "1"});
+        saveDailyHistory(userEmail);
+        return rows;
     }
 
+    // ============ STATS ============
     public int getCompletedCount(String userEmail) {
         Cursor c = getReadableDatabase().rawQuery("SELECT COUNT(*) FROM tasks WHERE user_email=? AND completed=1", new String[]{userEmail});
         int count = 0;
@@ -165,5 +186,79 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         if (c.moveToFirst()) count = c.getInt(0);
         c.close();
         return count;
+    }
+
+    // ============ DAILY HISTORY ============
+    private void saveDailyHistory(String userEmail) {
+        String today = new SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()).format(new Date());
+        int completed = getCompletedCount(userEmail);
+        int pending = getPendingCount(userEmail);
+        int total = completed + pending;
+
+        SQLiteDatabase db = getWritableDatabase();
+        ContentValues cv = new ContentValues();
+        cv.put("user_email", userEmail);
+        cv.put("task_date", today);
+        cv.put("completed_count", completed);
+        cv.put("pending_count", pending);
+        cv.put("total_count", total);
+
+        Cursor c = db.rawQuery("SELECT id FROM task_history WHERE user_email=? AND task_date=?", new String[]{userEmail, today});
+        if (c.moveToFirst()) {
+            db.update("task_history", cv, "user_email=? AND task_date=?", new String[]{userEmail, today});
+        } else {
+            db.insert("task_history", null, cv);
+        }
+        c.close();
+    }
+
+    public Map<String, Integer> getLast7DaysStats(String userEmail) {
+        Map<String, Integer> stats = new LinkedHashMap<>();
+        SimpleDateFormat sdf = new SimpleDateFormat("dd/MM/yyyy", Locale.getDefault());
+        Calendar cal = Calendar.getInstance();
+
+        for (int i = 6; i >= 0; i--) {
+            cal.add(Calendar.DATE, -i);
+            String date = sdf.format(cal.getTime());
+            stats.put(date, 0);
+            cal = Calendar.getInstance();
+        }
+
+        Cursor c = getReadableDatabase().rawQuery(
+                "SELECT task_date, completed_count FROM task_history WHERE user_email=? ORDER BY task_date ASC",
+                new String[]{userEmail});
+        if (c.moveToFirst()) {
+            do {
+                String date = c.getString(0);
+                int count = c.getInt(1);
+                if (stats.containsKey(date)) {
+                    stats.put(date, count);
+                }
+            } while (c.moveToNext());
+        }
+        c.close();
+
+        // Nếu hôm nay chưa có trong history, lấy từ tasks hiện tại
+        String today = sdf.format(new Date());
+        if (!stats.containsKey(today) || stats.get(today) == 0) {
+            stats.put(today, getCompletedCount(userEmail));
+        }
+
+        return stats;
+    }
+
+    public int getTotalCompletedAllTime(String userEmail) {
+        Cursor c = getReadableDatabase().rawQuery(
+                "SELECT SUM(completed_count) FROM task_history WHERE user_email=?",
+                new String[]{userEmail});
+        int total = 0;
+        if (c.moveToFirst()) total = c.getInt(0);
+        c.close();
+        return total;
+    }
+
+    // Helper class
+    private static class LinkedHashMap<K, V> extends java.util.LinkedHashMap<K, V> {
+        // Just to make LinkedHashMap accessible
     }
 }

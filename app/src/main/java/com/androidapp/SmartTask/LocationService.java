@@ -25,7 +25,11 @@ import com.google.android.gms.location.LocationResult;
 import com.google.android.gms.location.LocationServices;
 import com.google.android.gms.location.Priority;
 
+import java.text.SimpleDateFormat;
+import java.util.Calendar;
+import java.util.Date;
 import java.util.List;
+import java.util.Locale;
 
 public class LocationService extends Service {
 
@@ -96,7 +100,7 @@ public class LocationService extends Service {
                 if (locationResult == null) return;
                 Location location = locationResult.getLastLocation();
                 if (location != null && currentUser != null) {
-                    checkNearbyTasks(location);
+                    checkNearbyTasksWithTime(location);
                 }
             }
         };
@@ -111,19 +115,65 @@ public class LocationService extends Service {
         }
     }
 
-    private void checkNearbyTasks(Location currentLocation) {
+    private void checkNearbyTasksWithTime(Location currentLocation) {
         List<Task> tasks = dbHelper.getLocationReminderTasks(currentUser);
+        Calendar now = Calendar.getInstance();
+        int currentHour = now.get(Calendar.HOUR_OF_DAY);
+        int currentMinute = now.get(Calendar.MINUTE);
+
         for (Task task : tasks) {
-            if (!task.isCompleted() && task.isLocationReminder()) {
+            if (!task.isCompleted() && task.isLocationReminder() && !task.getLocationName().isEmpty()) {
+
+                // Check GPS: trong bán kính 200m
                 double distance = calculateDistance(
                         currentLocation.getLatitude(), currentLocation.getLongitude(),
                         task.getLocationLat(), task.getLocationLng());
-                if (distance < 100) {
-                    showLocationNotification(task);
-                    task.setLocationReminder(false);
-                    dbHelper.updateTask(task);
+
+                if (distance < 200) {
+                    // Check Time: gần đến giờ hẹn (trong vòng 15 phút tới)
+                    boolean nearTime = isNearTaskTime(task.getTime(), currentHour, currentMinute);
+
+                    if (nearTime) {
+                        showLocationNotification(task);
+                        task.setLocationReminder(false);
+                        dbHelper.updateTask(task);
+                    }
                 }
             }
+        }
+    }
+
+    private boolean isNearTaskTime(String taskTime, int currentHour, int currentMinute) {
+        if (taskTime == null || taskTime.isEmpty() || taskTime.equals("Chua dat gio")) {
+            return false;
+        }
+
+        try {
+            // Parse time từ format "09:15 AM"
+            String[] parts = taskTime.split(" ");
+            if (parts.length < 2) return false;
+
+            String[] timeParts = parts[0].split(":");
+            int taskHour = Integer.parseInt(timeParts[0]);
+            int taskMinute = Integer.parseInt(timeParts[1]);
+            String amPm = parts[1];
+
+            // Chuyển sang 24h
+            if (amPm.equals("PM") && taskHour < 12) taskHour += 12;
+            if (amPm.equals("AM") && taskHour == 12) taskHour = 0;
+
+            // Tính số phút từ 0h
+            int taskTotalMinutes = taskHour * 60 + taskMinute;
+            int currentTotalMinutes = currentHour * 60 + currentMinute;
+
+            // Check nếu hiện tại đang trong khoảng 15 phút TRƯỚC giờ hẹn
+            int diff = taskTotalMinutes - currentTotalMinutes;
+
+            // Nếu còn 1-15 phút nữa là đến giờ
+            return diff >= 1 && diff <= 15;
+        } catch (Exception e) {
+            Log.e(TAG, "Error parsing time: " + taskTime, e);
+            return false;
         }
     }
 
@@ -158,14 +208,19 @@ public class LocationService extends Service {
         NotificationCompat.Builder builder = new NotificationCompat.Builder(this, channelId)
                 .setSmallIcon(android.R.drawable.ic_menu_mylocation)
                 .setContentTitle("📍 Ban dang o gan: " + task.getLocationName())
-                .setContentText(task.getTitle())
+                .setContentText("⏰ Sap den gio: " + task.getTime() + " - " + task.getTitle())
+                .setStyle(new NotificationCompat.BigTextStyle()
+                        .bigText("📍 Vi tri: " + task.getLocationName()
+                                + "\n⏰ Gio: " + task.getTime()
+                                + "\n📋 Task: " + task.getTitle()
+                                + "\n\nHay chuan bi hoan thanh!"))
                 .setPriority(NotificationCompat.PRIORITY_HIGH)
                 .setContentIntent(pi)
                 .setAutoCancel(true)
                 .setVibrate(new long[]{0, 500, 200, 500});
 
         NotificationManagerCompat.from(this).notify(task.getId() + 10000, builder.build());
-        Log.d(TAG, "Location notification: " + task.getTitle());
+        Log.d(TAG, "Location+Time notification: " + task.getTitle());
     }
 
     @Override

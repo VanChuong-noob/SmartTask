@@ -1,14 +1,10 @@
 package com.androidapp.SmartTask;
 
 import android.Manifest;
-import android.app.NotificationChannel;
-import android.app.NotificationManager;
-import android.app.PendingIntent;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.graphics.Paint;
-import android.location.Location;
 import android.os.Build;
 import android.os.Bundle;
 import android.text.TextUtils;
@@ -27,14 +23,9 @@ import androidx.annotation.NonNull;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
-import androidx.core.app.NotificationCompat;
-import androidx.core.app.NotificationManagerCompat;
 import androidx.core.content.ContextCompat;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
-
-import com.google.android.gms.location.FusedLocationProviderClient;
-import com.google.android.gms.location.LocationServices;
 
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -51,6 +42,7 @@ public class MainActivity extends AppCompatActivity {
     private DatabaseHelper dbHelper;
     private SmartFeatureManager smartFeature;
     private AlarmScheduler alarmScheduler;
+    private FirebaseSyncManager firebaseSync;
     private SharedPreferences prefs;
     private String currentUser;
     private String selectedTime = "";
@@ -59,7 +51,6 @@ public class MainActivity extends AppCompatActivity {
     private double selectedLocationLat = 0;
     private double selectedLocationLng = 0;
     private boolean locationReminderEnabled = false;
-    private FusedLocationProviderClient fusedLocationClient;
 
     private final ActivityResultLauncher<Intent> locationPickerLauncher =
             registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), result -> {
@@ -80,8 +71,9 @@ public class MainActivity extends AppCompatActivity {
         dbHelper = new DatabaseHelper(this);
         smartFeature = new SmartFeatureManager(this);
         alarmScheduler = new AlarmScheduler(this);
+        firebaseSync = new FirebaseSyncManager();
+        firebaseSync.setDbHelper(dbHelper);
         prefs = getSharedPreferences("SmartTask", MODE_PRIVATE);
-        fusedLocationClient = LocationServices.getFusedLocationProviderClient(this);
 
         if (!prefs.getBoolean("isLoggedIn", false)) {
             startActivity(new Intent(this, LoginActivity.class));
@@ -95,6 +87,12 @@ public class MainActivity extends AppCompatActivity {
         setupRecyclerView();
         smartFeature.checkFirstOpenToday(currentUser);
         loadTasks();
+
+        // Sync Firebase
+        firebaseSync.syncTasks(currentUser, () -> {
+            loadTasks();
+            Toast.makeText(this, "Da dong bo!", Toast.LENGTH_SHORT).show();
+        });
     }
 
     private void requestPermissions() {
@@ -260,6 +258,8 @@ public class MainActivity extends AppCompatActivity {
                     task.setLocationReminder(locationReminderEnabled && !selectedLocationName.isEmpty());
                     long id = dbHelper.addTask(task);
                     if (id != -1) {
+                        task.setId((int) id);
+                        firebaseSync.uploadTask(task);
                         if (cbReminder.isChecked() && !selectedTime.equals("Chua dat gio")) {
                             alarmScheduler.scheduleTaskReminder((int) id, title, selectedHour, selectedMinute);
                         }
@@ -321,6 +321,7 @@ public class MainActivity extends AppCompatActivity {
                     task.setLocationLng(selectedLocationLng);
                     task.setLocationReminder(locationReminderEnabled && !selectedLocationName.isEmpty());
                     dbHelper.updateTask(task);
+                    firebaseSync.uploadTask(task);
                     alarmScheduler.cancelTaskReminder(task.getId());
                     if (cbReminder.isChecked() && !selectedTime.equals("Chua dat gio")) {
                         alarmScheduler.scheduleTaskReminder(task.getId(), title, selectedHour, selectedMinute);
@@ -334,6 +335,7 @@ public class MainActivity extends AppCompatActivity {
         task.setCompleted(!task.isCompleted());
         dbHelper.toggleTaskComplete(task.getId(), task.isCompleted());
         adapter.notifyItemChanged(pos);
+        firebaseSync.uploadTask(task);
         if (task.isCompleted()) alarmScheduler.cancelTaskReminder(task.getId());
         updateUI();
         checkAchievement();
@@ -345,6 +347,7 @@ public class MainActivity extends AppCompatActivity {
                 .setPositiveButton("Xoa", (d, w) -> {
                     alarmScheduler.cancelTaskReminder(task.getId());
                     dbHelper.deleteTask(task.getId());
+                    firebaseSync.deleteTask(task.getId());
                     taskList.remove(pos);
                     adapter.notifyItemRemoved(pos);
                     updateUI();

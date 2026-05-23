@@ -25,9 +25,9 @@ import com.github.mikephil.charting.formatter.PercentFormatter;
 
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
-import java.util.Calendar;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 
 public class StatsActivity extends AppCompatActivity {
 
@@ -38,9 +38,7 @@ public class StatsActivity extends AppCompatActivity {
     private AchievementManager achievementManager;
     private SharedPreferences prefs;
     private String currentUser;
-    private TextView tvTotalAchievements;
-    private TextView tvStreakBig;
-    private TextView tvCompletionRate;
+    private TextView tvTotalAchievements, tvStreakBig, tvCompletionRate;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -98,12 +96,8 @@ public class StatsActivity extends AppCompatActivity {
         int pending = dbHelper.getPendingCount(currentUser);
 
         ArrayList<PieEntry> entries = new ArrayList<>();
-        if (completed > 0) {
-            entries.add(new PieEntry(completed, "Hoan thanh"));
-        }
-        if (pending > 0) {
-            entries.add(new PieEntry(pending, "Dang cho"));
-        }
+        if (completed > 0) entries.add(new PieEntry(completed, "Hoan thanh"));
+        if (pending > 0) entries.add(new PieEntry(pending, "Dang cho"));
 
         if (entries.isEmpty()) {
             pieChart.setNoDataText("Chua co du lieu");
@@ -135,17 +129,20 @@ public class StatsActivity extends AppCompatActivity {
     }
 
     private void setupBarChart() {
-        ArrayList<BarEntry> entries = new ArrayList<>();
-        String[] days = new String[7];
-        SimpleDateFormat sdf = new SimpleDateFormat("dd/MM", Locale.getDefault());
-        Calendar cal = Calendar.getInstance();
+        Map<String, Integer> weekStats = dbHelper.getLast7DaysStats(currentUser);
 
-        for (int i = 6; i >= 0; i--) {
-            cal.add(Calendar.DATE, -i);
-            days[6 - i] = sdf.format(cal.getTime());
-            int count = (int) (Math.random() * 10);
-            entries.add(new BarEntry(6 - i, count));
-            cal = Calendar.getInstance();
+        ArrayList<BarEntry> entries = new ArrayList<>();
+        List<String> days = new ArrayList<>(weekStats.keySet());
+        List<String> shortDays = new ArrayList<>();
+        SimpleDateFormat sdf = new SimpleDateFormat("dd/MM", Locale.getDefault());
+
+        int index = 0;
+        for (String date : days) {
+            int count = weekStats.get(date);
+            entries.add(new BarEntry(index, count));
+            // Rút gọn ngày: chỉ lấy dd/MM
+            shortDays.add(date.substring(0, 5));
+            index++;
         }
 
         BarDataSet dataSet = new BarDataSet(entries, "Task hoan thanh");
@@ -159,7 +156,7 @@ public class StatsActivity extends AppCompatActivity {
         barChart.setFitBars(true);
 
         XAxis xAxis = barChart.getXAxis();
-        xAxis.setValueFormatter(new IndexAxisValueFormatter(days));
+        xAxis.setValueFormatter(new IndexAxisValueFormatter(shortDays));
         xAxis.setPosition(XAxis.XAxisPosition.BOTTOM);
         xAxis.setGranularity(1f);
         xAxis.setDrawGridLines(false);
@@ -197,8 +194,8 @@ public class StatsActivity extends AppCompatActivity {
 
             LinearLayout textLayout = new LinearLayout(this);
             textLayout.setOrientation(LinearLayout.VERTICAL);
-            LinearLayout.LayoutParams textParams = new LinearLayout.LayoutParams(
-                    0, LinearLayout.LayoutParams.WRAP_CONTENT, 1);
+            LinearLayout.LayoutParams textParams = new LinearLayout.LayoutParams(0,
+                    LinearLayout.LayoutParams.WRAP_CONTENT, 1);
             textParams.setMargins(16, 0, 16, 0);
             textLayout.setLayoutParams(textParams);
 

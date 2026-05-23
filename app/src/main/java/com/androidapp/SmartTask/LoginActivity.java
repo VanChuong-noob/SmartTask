@@ -15,6 +15,7 @@ public class LoginActivity extends AppCompatActivity {
     private EditText etEmail, etPassword;
     private TextView btnLogin, tvRegister;
     private DatabaseHelper dbHelper;
+    private FirebaseAuthManager firebaseAuth;
     private SharedPreferences prefs;
 
     @Override
@@ -23,6 +24,7 @@ public class LoginActivity extends AppCompatActivity {
         setContentView(R.layout.activity_login);
 
         dbHelper = new DatabaseHelper(this);
+        firebaseAuth = new FirebaseAuthManager();
         prefs = getSharedPreferences("SmartTask", MODE_PRIVATE);
 
         if (prefs.getBoolean("isLoggedIn", false)) {
@@ -52,13 +54,26 @@ public class LoginActivity extends AppCompatActivity {
             return;
         }
 
+        // Login local first
         if (dbHelper.checkUser(email, password)) {
-            saveLogin(email);
-            Toast.makeText(this, "Dang nhap thanh cong!", Toast.LENGTH_SHORT).show();
-            goToMain();
-        } else {
-            Toast.makeText(this, "Sai email hoac mat khau!", Toast.LENGTH_SHORT).show();
+            saveLoginAndGo(email);
+            return;
         }
+
+        // Login Firebase
+        firebaseAuth.loginUser(email, password, new FirebaseAuthManager.AuthCallback() {
+            @Override
+            public void onSuccess(com.google.firebase.auth.FirebaseUser user) {
+                String name = email.split("@")[0];
+                dbHelper.registerUser(email, password, name);
+                saveLoginAndGo(email);
+            }
+
+            @Override
+            public void onFailure(String error) {
+                Toast.makeText(LoginActivity.this, "Sai email hoac mat khau!", Toast.LENGTH_SHORT).show();
+            }
+        });
     }
 
     private void register() {
@@ -77,27 +92,29 @@ public class LoginActivity extends AppCompatActivity {
             etPassword.setError("Mat khau it nhat 4 ky tu");
             return;
         }
-        if (dbHelper.checkEmailExists(email)) {
-            Toast.makeText(this, "Email da ton tai!", Toast.LENGTH_SHORT).show();
-            return;
-        }
 
-        String name = email.split("@")[0];
-        boolean success = dbHelper.registerUser(email, password, name);
-        if (success) {
-            saveLogin(email);
-            Toast.makeText(this, "Dang ky thanh cong!", Toast.LENGTH_SHORT).show();
-            goToMain();
-        } else {
-            Toast.makeText(this, "Dang ky that bai!", Toast.LENGTH_SHORT).show();
-        }
+        firebaseAuth.registerUser(email, password, new FirebaseAuthManager.AuthCallback() {
+            @Override
+            public void onSuccess(com.google.firebase.auth.FirebaseUser user) {
+                String name = email.split("@")[0];
+                dbHelper.registerUser(email, password, name);
+                saveLoginAndGo(email);
+                Toast.makeText(LoginActivity.this, "Dang ky thanh cong!", Toast.LENGTH_SHORT).show();
+            }
+
+            @Override
+            public void onFailure(String error) {
+                Toast.makeText(LoginActivity.this, "Loi: " + error, Toast.LENGTH_LONG).show();
+            }
+        });
     }
 
-    private void saveLogin(String email) {
+    private void saveLoginAndGo(String email) {
         prefs.edit()
                 .putBoolean("isLoggedIn", true)
                 .putString("currentUser", email)
                 .apply();
+        goToMain();
     }
 
     private void goToMain() {
