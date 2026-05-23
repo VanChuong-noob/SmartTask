@@ -1,14 +1,17 @@
 package com.androidapp.SmartTask;
 
 import android.Manifest;
-import android.app.AlarmManager;
-import android.app.AlertDialog;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
+import android.app.PendingIntent;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.graphics.Paint;
+import android.location.Location;
 import android.os.Build;
 import android.os.Bundle;
+import android.text.TextUtils;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -18,10 +21,20 @@ import android.widget.NumberPicker;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
+import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.app.ActivityCompat;
+import androidx.core.app.NotificationCompat;
+import androidx.core.app.NotificationManagerCompat;
+import androidx.core.content.ContextCompat;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
+
+import com.google.android.gms.location.FusedLocationProviderClient;
+import com.google.android.gms.location.LocationServices;
 
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -34,18 +47,30 @@ public class MainActivity extends AppCompatActivity {
     private RecyclerView recyclerView;
     private TaskAdapter adapter;
     private final List<Task> taskList = new ArrayList<>();
-    private TextView tvComplete;
-    private TextView tvPending;
-    private TextView tvStreak;
-    private TextView tvSuggestion;
+    private TextView tvComplete, tvPending, tvStreak, tvSuggestion, tvEmpty;
     private DatabaseHelper dbHelper;
     private SmartFeatureManager smartFeature;
     private AlarmScheduler alarmScheduler;
     private SharedPreferences prefs;
     private String currentUser;
     private String selectedTime = "";
-    private int selectedHour = 9;
-    private int selectedMinute = 0;
+    private int selectedHour = 9, selectedMinute = 0;
+    private String selectedLocationName = "";
+    private double selectedLocationLat = 0;
+    private double selectedLocationLng = 0;
+    private boolean locationReminderEnabled = false;
+    private FusedLocationProviderClient fusedLocationClient;
+
+    private final ActivityResultLauncher<Intent> locationPickerLauncher =
+            registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), result -> {
+                if (result.getResultCode() == RESULT_OK && result.getData() != null) {
+                    Intent data = result.getData();
+                    selectedLocationName = data.getStringExtra("location_name");
+                    selectedLocationLat = data.getDoubleExtra("location_lat", 0);
+                    selectedLocationLng = data.getDoubleExtra("location_lng", 0);
+                    locationReminderEnabled = !selectedLocationName.isEmpty();
+                }
+            });
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -56,8 +81,8 @@ public class MainActivity extends AppCompatActivity {
         smartFeature = new SmartFeatureManager(this);
         alarmScheduler = new AlarmScheduler(this);
         prefs = getSharedPreferences("SmartTask", MODE_PRIVATE);
+        fusedLocationClient = LocationServices.getFusedLocationProviderClient(this);
 
-        // Check login
         if (!prefs.getBoolean("isLoggedIn", false)) {
             startActivity(new Intent(this, LoginActivity.class));
             finish();
@@ -65,360 +90,337 @@ public class MainActivity extends AppCompatActivity {
         }
 
         currentUser = prefs.getString("currentUser", "");
+        requestPermissions();
+        initViews();
+        setupRecyclerView();
+        smartFeature.checkFirstOpenToday(currentUser);
+        loadTasks();
+    }
 
-        // Request quyền exact alarm cho Android 12+
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            AlarmManager alarmManager = (AlarmManager) getSystemService(ALARM_SERVICE);
-            if (alarmManager != null && !alarmManager.canScheduleExactAlarms()) {
-                Intent intent = new Intent(android.provider.Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM);
-                startActivity(intent);
-            }
-        }
-
-        // Request quyền notification cho Android 13+
+    private void requestPermissions() {
+        List<String> permissions = new ArrayList<>();
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
-                    != PackageManager.PERMISSION_GRANTED) {
-                requestPermissions(
-                        new String[]{Manifest.permission.POST_NOTIFICATIONS},
-                        1001
-                );
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                permissions.add(Manifest.permission.POST_NOTIFICATIONS);
             }
         }
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            permissions.add(Manifest.permission.ACCESS_FINE_LOCATION);
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_BACKGROUND_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+                permissions.add(Manifest.permission.ACCESS_BACKGROUND_LOCATION);
+            }
+        }
+        if (!permissions.isEmpty()) {
+            ActivityCompat.requestPermissions(this, permissions.toArray(new String[0]), 1001);
+        } else {
+            startLocationService();
+        }
+    }
 
-        // Ánh xạ views
+    @Override
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == 1001) {
+            startLocationService();
+        }
+    }
+
+    private void startLocationService() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+                    && ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_BACKGROUND_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+                Intent serviceIntent = new Intent(this, LocationService.class);
+                serviceIntent.putExtra("user_email", currentUser);
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    startForegroundService(serviceIntent);
+                } else {
+                    startService(serviceIntent);
+                }
+            }
+        }
+    }
+
+    private void initViews() {
         recyclerView = findViewById(R.id.recyclerView);
         tvComplete = findViewById(R.id.tvComplete);
         tvPending = findViewById(R.id.tvPending);
         tvStreak = findViewById(R.id.tvStreak);
         tvSuggestion = findViewById(R.id.tvSuggestion);
+        tvEmpty = findViewById(R.id.tvEmpty);
         TextView tvAddNew = findViewById(R.id.tvAddNew);
         TextView tvLogout = findViewById(R.id.tvLogout);
         TextView tvDeleteCompleted = findViewById(R.id.tvDeleteCompleted);
+        TextView tvStats = findViewById(R.id.tvStats);
 
-        // Đặt morning reminder mặc định 8:00 sáng mỗi ngày
-        alarmScheduler.scheduleMorningReminder(8, 0);
+        tvLogout.setOnClickListener(v -> {
+            stopService(new Intent(this, LocationService.class));
+            prefs.edit().clear().apply();
+            startActivity(new Intent(this, LoginActivity.class));
+            finish();
+        });
+        tvAddNew.setOnClickListener(v -> showAddDialog());
+        tvDeleteCompleted.setOnClickListener(v -> deleteCompletedTasks());
+        tvStats.setOnClickListener(v -> startActivity(new Intent(this, StatsActivity.class)));
+    }
 
-        // SMART FEATURE: Check first open today
-        smartFeature.checkFirstOpenToday(currentUser);
-
-        // Load tasks từ database
-        loadTasks();
-
-        // Setup RecyclerView
+    private void setupRecyclerView() {
         adapter = new TaskAdapter(taskList);
         recyclerView.setLayoutManager(new LinearLayoutManager(this));
         recyclerView.setAdapter(adapter);
-
-        // Update suggestion + streak
-        updateSuggestion();
-        tvStreak.setText(String.valueOf(smartFeature.getStreak()));
-
-        // Logout
-        tvLogout.setOnClickListener(v -> {
-            prefs.edit().clear().apply();
-            startActivity(new Intent(MainActivity.this, LoginActivity.class));
-            finish();
-        });
-
-        // Thêm task mới
-        tvAddNew.setOnClickListener(v -> showAddTaskDialog());
-
-        // Xoá task đã hoàn thành
-        tvDeleteCompleted.setOnClickListener(v -> deleteCompletedTasks());
-
-        // TEST ALARM - Bỏ comment dòng dưới để test, sau đó comment lại
-        // alarmScheduler.scheduleTestAlarm("Test thong bao khi tat app");
-        // Toast.makeText(this, "Alarm test set - Tat app va doi 10 giay!", Toast.LENGTH_LONG).show();
-
-        // Hiển thị streak
-        int streak = smartFeature.getStreak();
-        if (streak > 1) {
-            Toast.makeText(this, "🔥 Streak: " + streak + " ngay lien tiep!", Toast.LENGTH_SHORT).show();
-        }
     }
 
     @Override
     protected void onResume() {
         super.onResume();
-        smartFeature.checkEveningReminder(currentUser);
-        updateSuggestion();
+        updateUI();
     }
 
     private void loadTasks() {
         taskList.clear();
         taskList.addAll(dbHelper.getAllTasks(currentUser));
-        updateStats();
+        adapter.notifyDataSetChanged();
+        updateUI();
     }
 
-    private void updateSuggestion() {
-        String suggestion = smartFeature.getSmartSuggestion(currentUser);
-        tvSuggestion.setText("💡 " + suggestion);
+    private void updateUI() {
+        tvComplete.setText(String.valueOf(dbHelper.getCompletedCount(currentUser)));
+        tvPending.setText(String.valueOf(dbHelper.getPendingCount(currentUser)));
+        tvStreak.setText(String.valueOf(smartFeature.getStreak()));
+        tvSuggestion.setText(smartFeature.getSmartSuggestion(currentUser));
+        boolean empty = taskList.isEmpty();
+        tvEmpty.setVisibility(empty ? View.VISIBLE : View.GONE);
+        recyclerView.setVisibility(empty ? View.GONE : View.VISIBLE);
     }
 
-    // ============ TIME PICKER ============
-    private void showTimePickerDialog(TextView tvTimeDisplay) {
-        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+    private void showTimePicker(TextView tvDisplay) {
         View view = LayoutInflater.from(this).inflate(R.layout.dialog_time_picker, null);
-
         NumberPicker npHour = view.findViewById(R.id.npHour);
         NumberPicker npMinute = view.findViewById(R.id.npMinute);
+        npHour.setMinValue(0); npHour.setMaxValue(23); npHour.setValue(selectedHour);
+        npMinute.setMinValue(0); npMinute.setMaxValue(59); npMinute.setValue(selectedMinute);
 
-        npHour.setMinValue(0);
-        npHour.setMaxValue(23);
-        npHour.setValue(selectedHour);
-        npHour.setFormatter(value -> String.format(Locale.getDefault(), "%02d", value) + " giờ");
-
-        npMinute.setMinValue(0);
-        npMinute.setMaxValue(59);
-        npMinute.setValue(selectedMinute);
-        npMinute.setFormatter(value -> String.format(Locale.getDefault(), "%02d", value) + " phut");
-
-        builder.setView(view);
-        builder.setPositiveButton("✅ OK", (dialog, which) -> {
-            selectedHour = npHour.getValue();
-            selectedMinute = npMinute.getValue();
-            String amPm = selectedHour < 12 ? "AM" : "PM";
-            int displayHour = selectedHour > 12 ? selectedHour - 12 : selectedHour;
-            if (displayHour == 0) displayHour = 12;
-            selectedTime = String.format(Locale.getDefault(), "%02d:%02d %s", displayHour, selectedMinute, amPm);
-            tvTimeDisplay.setText("⏰ " + selectedTime);
-        });
-        builder.setNegativeButton("❌ Huy", null);
-        builder.show();
+        new AlertDialog.Builder(this)
+                .setView(view)
+                .setPositiveButton("OK", (d, w) -> {
+                    selectedHour = npHour.getValue();
+                    selectedMinute = npMinute.getValue();
+                    int dh = selectedHour % 12;
+                    if (dh == 0) dh = 12;
+                    String amPm = selectedHour < 12 ? "AM" : "PM";
+                    selectedTime = String.format(Locale.getDefault(), "%02d:%02d %s", dh, selectedMinute, amPm);
+                    tvDisplay.setText(selectedTime);
+                })
+                .setNegativeButton("Huy", null).show();
     }
 
-    // ============ CREATE ============
-    private void showAddTaskDialog() {
-        AlertDialog.Builder builder = new AlertDialog.Builder(this);
-        View view = LayoutInflater.from(this).inflate(R.layout.dialog_add_task, null);
+    private void openLocationPicker() {
+        locationPickerLauncher.launch(new Intent(this, LocationPickerActivity.class));
+    }
 
-        final EditText etTitle = view.findViewById(R.id.etTitle);
-        final EditText etDescription = view.findViewById(R.id.etDescription);
-        final TextView tvTimePicker = view.findViewById(R.id.tvTimePicker);
-        final CheckBox cbSetReminder = view.findViewById(R.id.cbSetReminder);
+    private void showAddDialog() {
+        View view = LayoutInflater.from(this).inflate(R.layout.dialog_add_task, null);
+        EditText etTitle = view.findViewById(R.id.etTitle);
+        EditText etDesc = view.findViewById(R.id.etDescription);
+        TextView tvTime = view.findViewById(R.id.tvTimePicker);
+        TextView tvLocation = view.findViewById(R.id.tvLocationPicker);
+        CheckBox cbReminder = view.findViewById(R.id.cbSetReminder);
+        CheckBox cbLocation = view.findViewById(R.id.cbLocationReminder);
 
         selectedTime = "Chua dat gio";
-        tvTimePicker.setText("👆 Cham de chon gio");
+        selectedLocationName = "";
+        selectedLocationLat = 0;
+        selectedLocationLng = 0;
+        locationReminderEnabled = false;
 
-        tvTimePicker.setOnClickListener(v -> showTimePickerDialog(tvTimePicker));
-
-        builder.setView(view);
-        builder.setPositiveButton("✅ Them", (dialog, which) -> {
-            String title = etTitle.getText().toString().trim();
-            String description = etDescription.getText().toString().trim();
-
-            if (!title.isEmpty()) {
-                String todayDate = new SimpleDateFormat("dd/MM/yyyy", Locale.getDefault())
-                        .format(new Date());
-
-                long taskId = dbHelper.addTask(title, description, selectedTime, todayDate, currentUser);
-                if (taskId != -1) {
-                    if (cbSetReminder.isChecked() && !selectedTime.equals("Chua dat gio")) {
-                        alarmScheduler.scheduleTaskReminder((int) taskId, title, selectedHour, selectedMinute);
-                        Toast.makeText(this, "🔔 Da dat nhac luc " + selectedTime, Toast.LENGTH_SHORT).show();
-                    }
-                    loadTasks();
-                    adapter.notifyItemInserted(taskList.size() - 1);
-                    updateSuggestion();
-                    Toast.makeText(MainActivity.this, "✅ Da them: " + title, Toast.LENGTH_SHORT).show();
-                }
-            }
+        tvTime.setText("Cham de chon gio");
+        tvLocation.setText("Cham de chon vi tri");
+        tvTime.setOnClickListener(v -> showTimePicker(tvTime));
+        tvLocation.setOnClickListener(v -> openLocationPicker());
+        cbLocation.setOnCheckedChangeListener((btn, checked) -> {
+            locationReminderEnabled = checked;
+            if (checked && selectedLocationName.isEmpty()) openLocationPicker();
         });
-        builder.setNegativeButton("❌ Huy", null);
-        builder.show();
+
+        new AlertDialog.Builder(this)
+                .setView(view)
+                .setTitle("Them cong viec")
+                .setPositiveButton("Them", (d, w) -> {
+                    String title = etTitle.getText().toString().trim();
+                    if (TextUtils.isEmpty(title)) {
+                        Toast.makeText(this, "Nhap ten", Toast.LENGTH_SHORT).show();
+                        return;
+                    }
+                    String date = new SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()).format(new Date());
+                    Task task = new Task(title, etDesc.getText().toString().trim(), selectedTime, date, currentUser);
+                    task.setLocationName(selectedLocationName);
+                    task.setLocationLat(selectedLocationLat);
+                    task.setLocationLng(selectedLocationLng);
+                    task.setLocationReminder(locationReminderEnabled && !selectedLocationName.isEmpty());
+                    long id = dbHelper.addTask(task);
+                    if (id != -1) {
+                        if (cbReminder.isChecked() && !selectedTime.equals("Chua dat gio")) {
+                            alarmScheduler.scheduleTaskReminder((int) id, title, selectedHour, selectedMinute);
+                        }
+                        loadTasks();
+                    }
+                })
+                .setNegativeButton("Huy", null).show();
     }
 
-    // ============ UPDATE ============
-    private void showEditTaskDialog(Task task) {
-        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+    private void showEditDialog(Task task) {
         View view = LayoutInflater.from(this).inflate(R.layout.dialog_add_task, null);
-
-        final EditText etTitle = view.findViewById(R.id.etTitle);
-        final EditText etDescription = view.findViewById(R.id.etDescription);
-        final TextView tvTimePicker = view.findViewById(R.id.tvTimePicker);
-        final CheckBox cbSetReminder = view.findViewById(R.id.cbSetReminder);
+        EditText etTitle = view.findViewById(R.id.etTitle);
+        EditText etDesc = view.findViewById(R.id.etDescription);
+        TextView tvTime = view.findViewById(R.id.tvTimePicker);
+        TextView tvLocation = view.findViewById(R.id.tvLocationPicker);
+        CheckBox cbReminder = view.findViewById(R.id.cbSetReminder);
+        CheckBox cbLocation = view.findViewById(R.id.cbLocationReminder);
 
         etTitle.setText(task.getTitle());
-        etDescription.setText(task.getDescription());
+        etDesc.setText(task.getDescription());
         selectedTime = task.getTime();
-        tvTimePicker.setText("⏰ " + selectedTime);
+        selectedLocationName = task.getLocationName();
+        selectedLocationLat = task.getLocationLat();
+        selectedLocationLng = task.getLocationLng();
+        locationReminderEnabled = task.isLocationReminder();
 
+        tvTime.setText(selectedTime);
+        tvLocation.setText(selectedLocationName.isEmpty() ? "Cham de chon vi tri" : selectedLocationName);
+        cbLocation.setChecked(locationReminderEnabled);
         try {
             String[] parts = selectedTime.split(" ");
-            if (parts.length > 0) {
-                String[] timeParts = parts[0].split(":");
-                selectedHour = Integer.parseInt(timeParts[0]);
-                selectedMinute = Integer.parseInt(timeParts[1]);
-                if (parts.length > 1 && parts[1].equals("PM") && selectedHour < 12) selectedHour += 12;
-            }
-        } catch (Exception e) {
-            selectedHour = 9;
-            selectedMinute = 0;
-        }
+            String[] tp = parts[0].split(":");
+            selectedHour = Integer.parseInt(tp[0]);
+            selectedMinute = Integer.parseInt(tp[1]);
+            if (parts.length > 1 && parts[1].equals("PM") && selectedHour < 12) selectedHour += 12;
+            if (parts.length > 1 && parts[1].equals("AM") && selectedHour == 12) selectedHour = 0;
+        } catch (Exception e) { selectedHour = 9; selectedMinute = 0; }
+        tvTime.setOnClickListener(v -> showTimePicker(tvTime));
+        tvLocation.setOnClickListener(v -> openLocationPicker());
+        cbLocation.setOnCheckedChangeListener((btn, checked) -> {
+            locationReminderEnabled = checked;
+            if (checked && selectedLocationName.isEmpty()) openLocationPicker();
+        });
 
-        tvTimePicker.setOnClickListener(v -> showTimePickerDialog(tvTimePicker));
-
-        builder.setView(view);
-        builder.setPositiveButton("✅ Cap nhat", (dialog, which) -> {
-            String title = etTitle.getText().toString().trim();
-            String description = etDescription.getText().toString().trim();
-
-            if (!title.isEmpty()) {
-                int rows = dbHelper.updateTask(task.getId(), title, description, selectedTime, task.getDate());
-                if (rows > 0) {
-                    if (cbSetReminder.isChecked() && !selectedTime.equals("Chua dat gio")) {
-                        alarmScheduler.cancelTaskReminder(task.getId());
+        new AlertDialog.Builder(this)
+                .setView(view)
+                .setTitle("Sua cong viec")
+                .setPositiveButton("Cap nhat", (d, w) -> {
+                    String title = etTitle.getText().toString().trim();
+                    if (TextUtils.isEmpty(title)) {
+                        Toast.makeText(this, "Nhap ten", Toast.LENGTH_SHORT).show();
+                        return;
+                    }
+                    task.setTitle(title);
+                    task.setDescription(etDesc.getText().toString().trim());
+                    task.setTime(selectedTime);
+                    task.setLocationName(selectedLocationName);
+                    task.setLocationLat(selectedLocationLat);
+                    task.setLocationLng(selectedLocationLng);
+                    task.setLocationReminder(locationReminderEnabled && !selectedLocationName.isEmpty());
+                    dbHelper.updateTask(task);
+                    alarmScheduler.cancelTaskReminder(task.getId());
+                    if (cbReminder.isChecked() && !selectedTime.equals("Chua dat gio")) {
                         alarmScheduler.scheduleTaskReminder(task.getId(), title, selectedHour, selectedMinute);
                     }
                     loadTasks();
-                    adapter.notifyDataSetChanged();
-                    updateSuggestion();
-                    Toast.makeText(MainActivity.this, "✅ Da cap nhat: " + title, Toast.LENGTH_SHORT).show();
-                }
-            }
-        });
-        builder.setNegativeButton("❌ Huy", null);
-        builder.show();
+                })
+                .setNegativeButton("Huy", null).show();
     }
 
-    // ============ TOGGLE COMPLETE ============
-    private void toggleTaskComplete(Task task, int position) {
-        boolean newStatus = !task.isCompleted();
-        dbHelper.toggleTaskComplete(task.getId(), newStatus);
-        task.setCompleted(newStatus);
-        adapter.notifyItemChanged(position);
-        updateStats();
-        updateSuggestion();
-
-        if (newStatus) {
-            alarmScheduler.cancelTaskReminder(task.getId());
-            Toast.makeText(this, "🎉 Hoan thanh: " + task.getTitle(), Toast.LENGTH_SHORT).show();
-
-            if (dbHelper.getPendingCount(currentUser) == 0) {
-                Toast.makeText(this, "🎊 Chuc mung! Tat ca cong viec da hoan thanh!", Toast.LENGTH_LONG).show();
-            }
-        }
+    private void toggleComplete(Task task, int pos) {
+        task.setCompleted(!task.isCompleted());
+        dbHelper.toggleTaskComplete(task.getId(), task.isCompleted());
+        adapter.notifyItemChanged(pos);
+        if (task.isCompleted()) alarmScheduler.cancelTaskReminder(task.getId());
+        updateUI();
+        checkAchievement();
     }
 
-    // ============ DELETE ============
-    private void deleteTask(Task task, int position) {
+    private void deleteTask(Task task, int pos) {
         new AlertDialog.Builder(this)
-                .setTitle("🗑️ Xoa cong viec")
-                .setMessage("Ban co chac muon xoa:\n" + task.getTitle() + "?")
-                .setPositiveButton("✅ Xoa", (dialog, which) -> {
+                .setTitle("Xoa").setMessage("Xoa: " + task.getTitle() + "?")
+                .setPositiveButton("Xoa", (d, w) -> {
                     alarmScheduler.cancelTaskReminder(task.getId());
                     dbHelper.deleteTask(task.getId());
-                    taskList.remove(position);
-                    adapter.notifyItemRemoved(position);
-                    updateStats();
-                    updateSuggestion();
-                    Toast.makeText(MainActivity.this, "🗑️ Da xoa!", Toast.LENGTH_SHORT).show();
+                    taskList.remove(pos);
+                    adapter.notifyItemRemoved(pos);
+                    updateUI();
                 })
-                .setNegativeButton("❌ Huy", null)
-                .show();
+                .setNegativeButton("Huy", null).show();
     }
 
     private void deleteCompletedTasks() {
-        int completedCount = dbHelper.getCompletedCount(currentUser);
-        if (completedCount == 0) {
-            Toast.makeText(this, "Khong co task nao da hoan thanh!", Toast.LENGTH_SHORT).show();
+        int count = dbHelper.getCompletedCount(currentUser);
+        if (count == 0) {
+            Toast.makeText(this, "Khong co task hoan thanh", Toast.LENGTH_SHORT).show();
             return;
         }
-
         new AlertDialog.Builder(this)
-                .setTitle("🗑️ Xoa task hoan thanh")
-                .setMessage("Xoa tat ca " + completedCount + " task da hoan thanh?")
-                .setPositiveButton("✅ Xoa", (dialog, which) -> {
-                    dbHelper.deleteCompletedTasks(currentUser);
-                    loadTasks();
-                    adapter.notifyDataSetChanged();
-                    updateSuggestion();
-                    Toast.makeText(MainActivity.this, "✅ Da xoa task hoan thanh!", Toast.LENGTH_SHORT).show();
-                })
-                .setNegativeButton("❌ Huy", null)
-                .show();
+                .setTitle("Xoa task hoan thanh").setMessage("Xoa " + count + " task?")
+                .setPositiveButton("Xoa", (d, w) -> { dbHelper.deleteCompletedTasks(currentUser); loadTasks(); })
+                .setNegativeButton("Huy", null).show();
     }
 
-    // ============ UPDATE STATS ============
-    private void updateStats() {
-        int completed = dbHelper.getCompletedCount(currentUser);
-        int pending = dbHelper.getPendingCount(currentUser);
-        tvComplete.setText(String.valueOf(completed));
-        tvPending.setText(String.valueOf(pending));
-        tvStreak.setText(String.valueOf(smartFeature.getStreak()));
+    private void checkAchievement() {
+        AchievementManager am = new AchievementManager(MainActivity.this);
+        Achievement newAch = am.checkNewAchievement(currentUser);
+        if (newAch != null) {
+            new AlertDialog.Builder(this)
+                    .setTitle("Mo khoa thanh tuu!")
+                    .setMessage(newAch.getIcon() + " " + newAch.getTitle() + "\n" + newAch.getDescription())
+                    .setPositiveButton("TUYET VOI!", null).show();
+        }
     }
 
-    // ============ ADAPTER ============
-    private class TaskAdapter extends RecyclerView.Adapter<TaskAdapter.ViewHolder> {
-
-        private final List<Task> tasks;
-
-        public TaskAdapter(List<Task> tasks) {
-            this.tasks = tasks;
+    private class TaskAdapter extends RecyclerView.Adapter<TaskAdapter.VH> {
+        private final List<Task> list;
+        TaskAdapter(List<Task> list) { this.list = list; }
+        @NonNull @Override
+        public VH onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
+            return new VH(LayoutInflater.from(parent.getContext()).inflate(R.layout.item_task, parent, false));
         }
-
-        @NonNull
         @Override
-        public ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
-            View view = LayoutInflater.from(parent.getContext())
-                    .inflate(R.layout.item_task, parent, false);
-            return new ViewHolder(view);
-        }
-
-        @Override
-        public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
-            Task task = tasks.get(position);
-            holder.tvTitle.setText(task.getTitle());
-            holder.tvTime.setText(task.getTime());
-            holder.tvDate.setText(task.getDate());
-
-            holder.cbComplete.setOnCheckedChangeListener(null);
-            holder.cbComplete.setChecked(task.isCompleted());
-
-            if (task.isCompleted()) {
-                holder.tvTitle.setPaintFlags(
-                        holder.tvTitle.getPaintFlags() | Paint.STRIKE_THRU_TEXT_FLAG);
-                holder.tvTitle.setAlpha(0.4f);
+        public void onBindViewHolder(@NonNull VH h, int pos) {
+            Task t = list.get(pos);
+            h.tvTitle.setText(t.getTitle());
+            h.tvTime.setText(t.getTime());
+            h.tvDate.setText(t.getDate());
+            if (!t.getLocationName().isEmpty()) {
+                h.tvLocation.setVisibility(View.VISIBLE);
+                h.tvLocation.setText(t.getLocationName());
             } else {
-                holder.tvTitle.setPaintFlags(
-                        holder.tvTitle.getPaintFlags() & ~Paint.STRIKE_THRU_TEXT_FLAG);
-                holder.tvTitle.setAlpha(1.0f);
+                h.tvLocation.setVisibility(View.GONE);
             }
-
-            final int pos = holder.getBindingAdapterPosition();
-
-            holder.cbComplete.setOnCheckedChangeListener((buttonView, isChecked) ->
-                    toggleTaskComplete(task, pos));
-
-            holder.itemView.setOnClickListener(v -> showEditTaskDialog(task));
-
-            holder.tvEdit.setOnClickListener(v -> showEditTaskDialog(task));
-
-            holder.tvDelete.setOnClickListener(v -> deleteTask(task, pos));
+            h.cb.setOnCheckedChangeListener(null);
+            h.cb.setChecked(t.isCompleted());
+            if (t.isCompleted()) {
+                h.tvTitle.setPaintFlags(h.tvTitle.getPaintFlags() | Paint.STRIKE_THRU_TEXT_FLAG);
+                h.tvTitle.setAlpha(0.5f);
+            } else {
+                h.tvTitle.setPaintFlags(h.tvTitle.getPaintFlags() & ~Paint.STRIKE_THRU_TEXT_FLAG);
+                h.tvTitle.setAlpha(1f);
+            }
+            int p = h.getBindingAdapterPosition();
+            h.cb.setOnCheckedChangeListener((btn, checked) -> toggleComplete(t, p));
+            h.tvEdit.setOnClickListener(v -> showEditDialog(t));
+            h.tvDelete.setOnClickListener(v -> deleteTask(t, p));
         }
-
-        @Override
-        public int getItemCount() {
-            return tasks.size();
-        }
-
-        class ViewHolder extends RecyclerView.ViewHolder {
-            CheckBox cbComplete;
-            TextView tvTitle;
-            TextView tvTime;
-            TextView tvDate;
-            TextView tvEdit;
-            TextView tvDelete;
-
-            public ViewHolder(@NonNull View itemView) {
-                super(itemView);
-                cbComplete = itemView.findViewById(R.id.cbComplete);
-                tvTitle = itemView.findViewById(R.id.tvTitle);
-                tvTime = itemView.findViewById(R.id.tvTime);
-                tvDate = itemView.findViewById(R.id.tvDate);
-                tvEdit = itemView.findViewById(R.id.tvEdit);
-                tvDelete = itemView.findViewById(R.id.tvDelete);
+        @Override public int getItemCount() { return list.size(); }
+        class VH extends RecyclerView.ViewHolder {
+            CheckBox cb;
+            TextView tvTitle, tvTime, tvDate, tvLocation, tvEdit, tvDelete;
+            VH(View v) {
+                super(v);
+                cb = v.findViewById(R.id.cbComplete);
+                tvTitle = v.findViewById(R.id.tvTitle);
+                tvTime = v.findViewById(R.id.tvTime);
+                tvDate = v.findViewById(R.id.tvDate);
+                tvLocation = v.findViewById(R.id.tvLocation);
+                tvEdit = v.findViewById(R.id.tvEdit);
+                tvDelete = v.findViewById(R.id.tvDelete);
             }
         }
     }

@@ -1,137 +1,129 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
-    android:layout_height="wrap_content"
-    android:orientation="vertical"
-    android:padding="20dp"
-    android:background="#FFFFFF">
+    android:layout_height="wrap_content">
 
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="📝 Tao cong viec moi"
-        android:textColor="#2D3436"
-        android:textSize="20sp"
-        android:textStyle="bold" />
-
-    <!-- Title Input -->
-    <androidx.cardview.widget.CardView
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="20dp"
-        app:cardBackgroundColor="#F8F9FE"
-        app:cardCornerRadius="14dp"
-        app:cardElevation="0dp"
-        xmlns:app="http://schemas.android.com/apk/res-auto">
+        android:orientation="vertical"
+        android:padding="20dp"
+        android:background="#FFFFFF">
 
         <EditText
             android:id="@+id/etTitle"
             android:layout_width="match_parent"
             android:layout_height="52dp"
-            android:background="@null"
-            android:hint="📌 Ten cong viec"
+            android:background="@drawable/bg_input"
+            android:hint="Ten cong viec"
             android:inputType="text"
             android:paddingStart="16dp"
             android:paddingEnd="16dp"
             android:textColor="#2D3436"
-            android:textColorHint="#B2BEC3"
             android:textSize="15sp" />
-    </androidx.cardview.widget.CardView>
-
-    <!-- Description Input -->
-    <androidx.cardview.widget.CardView
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="12dp"
-        app:cardBackgroundColor="#F8F9FE"
-        app:cardCornerRadius="14dp"
-        app:cardElevation="0dp"
-        xmlns:app="http://schemas.android.com/apk/res-auto">
 
         <EditText
             android:id="@+id/etDescription"
             android:layout_width="match_parent"
             android:layout_height="80dp"
-            android:background="@null"
+            android:layout_marginTop="12dp"
+            android:background="@drawable/bg_input"
             android:gravity="top"
-            android:hint="📝 Mo ta cong viec"
+            android:hint="Mo ta"
             android:inputType="textMultiLine"
             android:padding="16dp"
             android:textColor="#2D3436"
-            android:textColorHint="#B2BEC3"
             android:textSize="14sp" />
-    </androidx.cardview.widget.CardView>
 
-    <!-- Time Picker -->
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="16dp"
-        android:text="⏰ Thoi gian nhac nho"
-        android:textColor="#636E72"
-        android:textSize="14sp"
-        android:textStyle="bold" />
-
-    <androidx.cardview.widget.CardView
-        android:id="@+id/cardTimePicker"
-        android:layout_width="match_parent"
-        android:layout_height="52dp"
-        android:layout_marginTop="8dp"
-        app:cardBackgroundColor="#F8F9FE"
-        app:cardCornerRadius="14dp"
-        app:cardElevation="0dp"
-        xmlns:app="http://schemas.android.com/apk/res-auto">
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:text="Gio nhac:"
+            android:textColor="#636E72"
+            android:textSize="14sp"
+            android:textStyle="bold" />
 
         <TextView
             android:id="@+id/tvTimePicker"
             android:layout_width="match_parent"
-            android:layout_height="match_parent"
+            android:layout_height="52dp"
+            android:layout_marginTop="8dp"
+            android:background="@drawable/bg_input"
             android:gravity="center_vertical"
             android:paddingStart="16dp"
             android:paddingEnd="16dp"
-            android:text="👆 Cham de chon gio"
+            android:text="Cham de chon gio"
             android:textColor="#6C63FF"
             android:textSize="15sp"
             android:textStyle="bold" />
-    </androidx.cardview.widget.CardView>
 
-    <!-- Reminder Toggle -->
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="16dp"
-        android:gravity="center_vertical"
-        android:orientation="horizontal">
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
 
-        <androidx.cardview.widget.CardView
-            android:layout_width="44dp"
-            android:layout_height="44dp"
-            app:cardBackgroundColor="#F0E6FF"
-            app:cardCornerRadius="14dp"
-            app:cardElevation="0dp"
-            xmlns:app="http://schemas.android.com/apk/res-auto">
+            <CheckBox
+                android:id="@+id/cbSetReminder"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:buttonTint="#6C63FF" />
 
             <TextView
-                android:layout_width="match_parent"
-                android:layout_height="match_parent"
-                android:gravity="center"
-                android:text="🔔"
-                android:textSize="20sp" />
-        </androidx.cardview.widget.CardView>
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:text="Bat thong bao gio"
+                android:textColor="#2D3436"
+                android:textSize="15sp" />
+        </LinearLayout>
 
         <TextView
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="12dp"
-            android:layout_weight="1"
-            android:text="Bat thong bao nhac nho"
-            android:textColor="#2D3436"
-            android:textSize="15sp" />
-
-        <CheckBox
-            android:id="@+id/cbSetReminder"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:buttonTint="#6C63FF" />
+            android:layout_marginTop="16dp"
+            android:text="Vi tri nhac:"
+            android:textColor="#636E72"
+            android:textSize="14sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/tvLocationPicker"
+            android:layout_width="match_parent"
+            android:layout_height="52dp"
+            android:layout_marginTop="8dp"
+            android:background="@drawable/bg_input"
+            android:gravity="center_vertical"
+            android:paddingStart="16dp"
+            android:paddingEnd="16dp"
+            android:text="Cham de chon vi tri"
+            android:textColor="#4CAF50"
+            android:textSize="15sp"
+            android:textStyle="bold" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <CheckBox
+                android:id="@+id/cbLocationReminder"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:buttonTint="#4CAF50" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:text="Nhac khi den gan vi tri"
+                android:textColor="#2D3436"
+                android:textSize="15sp" />
+        </LinearLayout>
+
     </LinearLayout>
-</LinearLayout>
+</ScrollView>

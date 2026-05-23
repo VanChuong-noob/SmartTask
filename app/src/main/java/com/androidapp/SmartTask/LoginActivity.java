@@ -3,7 +3,7 @@ package com.androidapp.SmartTask;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.os.Bundle;
-import android.view.View;
+import android.text.TextUtils;
 import android.widget.EditText;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -25,7 +25,6 @@ public class LoginActivity extends AppCompatActivity {
         dbHelper = new DatabaseHelper(this);
         prefs = getSharedPreferences("SmartTask", MODE_PRIVATE);
 
-        // Check nếu đã login
         if (prefs.getBoolean("isLoggedIn", false)) {
             goToMain();
             return;
@@ -36,39 +35,25 @@ public class LoginActivity extends AppCompatActivity {
         btnLogin = findViewById(R.id.btnLogin);
         tvRegister = findViewById(R.id.tvRegister);
 
-        btnLogin.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                login();
-            }
-        });
-
-        tvRegister.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                register();
-            }
-        });
+        btnLogin.setOnClickListener(v -> login());
+        tvRegister.setOnClickListener(v -> register());
     }
 
     private void login() {
         String email = etEmail.getText().toString().trim();
         String password = etPassword.getText().toString().trim();
 
-        if (email.isEmpty()) {
+        if (TextUtils.isEmpty(email)) {
             etEmail.setError("Vui long nhap email");
             return;
         }
-
-        if (password.isEmpty()) {
+        if (TextUtils.isEmpty(password)) {
             etPassword.setError("Vui long nhap mat khau");
             return;
         }
 
-        // Check trong database
         if (dbHelper.checkUser(email, password)) {
-            prefs.edit().putBoolean("isLoggedIn", true).apply();
-            prefs.edit().putString("currentUser", email).apply();
+            saveLogin(email);
             Toast.makeText(this, "Dang nhap thanh cong!", Toast.LENGTH_SHORT).show();
             goToMain();
         } else {
@@ -80,32 +65,27 @@ public class LoginActivity extends AppCompatActivity {
         String email = etEmail.getText().toString().trim();
         String password = etPassword.getText().toString().trim();
 
-        if (email.isEmpty()) {
+        if (TextUtils.isEmpty(email)) {
             etEmail.setError("Vui long nhap email");
             return;
         }
-
-        if (password.isEmpty()) {
+        if (TextUtils.isEmpty(password)) {
             etPassword.setError("Vui long nhap mat khau");
             return;
         }
-
         if (password.length() < 4) {
             etPassword.setError("Mat khau it nhat 4 ky tu");
             return;
         }
-
-        // Check email đã tồn tại chưa
         if (dbHelper.checkEmailExists(email)) {
-            Toast.makeText(this, "Email da duoc dang ky!", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "Email da ton tai!", Toast.LENGTH_SHORT).show();
             return;
         }
 
-        // Đăng ký
-        String name = email.split("@")[0]; // Lấy phần trước @ làm tên
-        if (dbHelper.registerUser(email, password, name)) {
-            prefs.edit().putBoolean("isLoggedIn", true).apply();
-            prefs.edit().putString("currentUser", email).apply();
+        String name = email.split("@")[0];
+        boolean success = dbHelper.registerUser(email, password, name);
+        if (success) {
+            saveLogin(email);
             Toast.makeText(this, "Dang ky thanh cong!", Toast.LENGTH_SHORT).show();
             goToMain();
         } else {
@@ -113,9 +93,15 @@ public class LoginActivity extends AppCompatActivity {
         }
     }
 
+    private void saveLogin(String email) {
+        prefs.edit()
+                .putBoolean("isLoggedIn", true)
+                .putString("currentUser", email)
+                .apply();
+    }
+
     private void goToMain() {
-        Intent intent = new Intent(LoginActivity.this, MainActivity.class);
-        startActivity(intent);
+        startActivity(new Intent(this, MainActivity.class));
         finish();
     }
 }

@@ -1,9 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#F8F9FE"
+    android:background="#F5F6FA"
     android:orientation="vertical">
 
     <!-- Header -->
@@ -12,9 +11,8 @@
         android:layout_height="wrap_content"
         android:background="@drawable/bg_gradient_header"
         android:orientation="vertical"
-        android:padding="24dp">
+        android:padding="20dp">
 
-        <!-- Top Bar -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -31,7 +29,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="Xin chao!"
-                    android:textColor="#AAFFFFFF"
+                    android:textColor="#CCCCFF"
                     android:textSize="13sp" />
 
                 <TextView
@@ -40,33 +38,33 @@
                     android:layout_marginTop="2dp"
                     android:text="SmartTask"
                     android:textColor="#FFFFFF"
-                    android:textSize="24sp"
+                    android:textSize="26sp"
                     android:textStyle="bold" />
             </LinearLayout>
 
             <TextView
                 android:id="@+id/tvLogout"
-                android:layout_width="44dp"
-                android:layout_height="44dp"
-                android:background="#30FFFFFF"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:background="@drawable/bg_circle_white"
                 android:gravity="center"
                 android:text="EXIT"
                 android:textColor="#FFFFFF"
-                android:textSize="12sp"
+                android:textSize="11sp"
                 android:textStyle="bold" />
         </LinearLayout>
 
-        <!-- Stats Row -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="24dp"
+            android:layout_marginTop="20dp"
+            android:baselineAligned="false"
             android:orientation="horizontal">
 
             <LinearLayout
                 android:layout_width="0dp"
-                android:layout_height="90dp"
-                android:layout_marginEnd="8dp"
+                android:layout_height="85dp"
+                android:layout_marginEnd="6dp"
                 android:layout_weight="1"
                 android:background="@drawable/bg_card_stats"
                 android:gravity="center"
@@ -78,22 +76,23 @@
                     android:layout_height="wrap_content"
                     android:text="0"
                     android:textColor="#4CAF50"
-                    android:textSize="24sp"
+                    android:textSize="22sp"
                     android:textStyle="bold" />
 
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
                     android:text="Hoan thanh"
                     android:textColor="#666666"
-                    android:textSize="12sp" />
+                    android:textSize="11sp" />
             </LinearLayout>
 
             <LinearLayout
                 android:layout_width="0dp"
-                android:layout_height="90dp"
-                android:layout_marginStart="4dp"
-                android:layout_marginEnd="4dp"
+                android:layout_height="85dp"
+                android:layout_marginStart="3dp"
+                android:layout_marginEnd="3dp"
                 android:layout_weight="1"
                 android:background="@drawable/bg_card_stats"
                 android:gravity="center"
@@ -105,21 +104,22 @@
                     android:layout_height="wrap_content"
                     android:text="0"
                     android:textColor="#FF9800"
-                    android:textSize="24sp"
+                    android:textSize="22sp"
                     android:textStyle="bold" />
 
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
                     android:text="Dang cho"
                     android:textColor="#666666"
-                    android:textSize="12sp" />
+                    android:textSize="11sp" />
             </LinearLayout>
 
             <LinearLayout
                 android:layout_width="0dp"
-                android:layout_height="90dp"
-                android:layout_marginStart="8dp"
+                android:layout_height="85dp"
+                android:layout_marginStart="6dp"
                 android:layout_weight="1"
                 android:background="@drawable/bg_card_stats"
                 android:gravity="center"
@@ -131,20 +131,21 @@
                     android:layout_height="wrap_content"
                     android:text="0"
                     android:textColor="#E91E63"
-                    android:textSize="24sp"
+                    android:textSize="22sp"
                     android:textStyle="bold" />
 
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
                     android:text="Streak"
                     android:textColor="#666666"
-                    android:textSize="12sp" />
+                    android:textSize="11sp" />
             </LinearLayout>
         </LinearLayout>
-    </LinearHeader>
+    </LinearLayout>
 
-    <!-- Suggestion Bar -->
+    <!-- Suggestion -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -160,7 +161,7 @@
             android:id="@+id/tvSuggestion"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Hay them cong viec moi!"
+            android:text="Hay them cong viec moi de bat dau!"
             android:textColor="#E65100"
             android:textSize="13sp" />
     </LinearLayout>
@@ -173,8 +174,8 @@
         android:orientation="horizontal"
         android:paddingStart="16dp"
         android:paddingEnd="16dp"
-        android:paddingTop="16dp"
-        android:paddingBottom="8dp">
+        android:paddingTop="20dp"
+        android:paddingBottom="12dp">
 
         <TextView
             android:layout_width="0dp"
@@ -183,6 +184,21 @@
             android:text="Danh sach cong viec"
             android:textColor="#2D3436"
             android:textSize="18sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/tvStats"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginEnd="8dp"
+            android:background="@drawable/bg_chip_blue"
+            android:paddingStart="12dp"
+            android:paddingEnd="12dp"
+            android:paddingTop="6dp"
+            android:paddingBottom="6dp"
+            android:text="Stats"
+            android:textColor="#2196F3"
+            android:textSize="12sp"
             android:textStyle="bold" />
 
         <TextView
@@ -197,13 +213,14 @@
             android:paddingBottom="6dp"
             android:text="Xoa HT"
             android:textColor="#FF5252"
-            android:textSize="12sp" />
+            android:textSize="12sp"
+            android:textStyle="bold" />
 
         <TextView
             android:id="@+id/tvAddNew"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:background="@drawable/bg_button_purple"
+            android:background="@drawable/bg_chip_purple"
             android:paddingStart="16dp"
             android:paddingEnd="16dp"
             android:paddingTop="8dp"
@@ -214,14 +231,27 @@
             android:textStyle="bold" />
     </LinearLayout>
 
-    <!-- Task List -->
+    <!-- RecyclerView -->
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/recyclerView"
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1"
+        android:clipToPadding="false"
         android:paddingStart="16dp"
         android:paddingEnd="16dp"
         android:paddingBottom="16dp" />
+
+    <!-- Empty State -->
+    <TextView
+        android:id="@+id/tvEmpty"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:gravity="center"
+        android:text="Chua co cong viec nao!\nNhan + Them moi de bat dau"
+        android:textColor="#999999"
+        android:textSize="16sp"
+        android:visibility="gone" />
 
 </LinearLayout>

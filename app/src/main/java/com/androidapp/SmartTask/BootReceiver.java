@@ -9,13 +9,7 @@ public class BootReceiver extends BroadcastReceiver {
     @Override
     public void onReceive(Context context, Intent intent) {
         if (Intent.ACTION_BOOT_COMPLETED.equals(intent.getAction())) {
-            // Đặt lại buổi sáng reminder
-            AlarmScheduler scheduler = new AlarmScheduler(context);
-            scheduler.scheduleMorningReminder(8, 0);
-
-            // Load tất cả task từ database và đặt lại alarm
-            DatabaseHelper dbHelper = new DatabaseHelper(context);
-            // Logic đặt lại tất cả alarm cho các task chưa hoàn thành
+            // Không làm gì cả, đã tắt morning reminder
         }
     }
 }
