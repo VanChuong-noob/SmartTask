@@ -18,6 +18,8 @@ public class SmartFeatureManager {
         this.prefs = context.getSharedPreferences("SmartTask", Context.MODE_PRIVATE);
     }
 
+
+
     public void checkFirstOpenToday(String userEmail) {
         String today = new SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(new Date());
         String lastOpen = prefs.getString("last_open_date", "");
