@@ -10,6 +10,8 @@ import java.util.Locale;
 
 public class SmartFeatureManager {
 
+
+
     private DatabaseHelper dbHelper;
     private SharedPreferences prefs;
 
